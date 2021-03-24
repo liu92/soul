@@ -17,16 +17,20 @@
 
 package org.dromara.soul.client.springmvc.init;
 
-import java.io.IOException;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.soul.client.common.utils.OkHttpTools;
-import org.dromara.soul.client.springmvc.config.SoulSpringMvcConfig;
-import org.dromara.soul.client.springmvc.dto.SpringMvcRegisterDTO;
-import org.dromara.soul.client.springmvc.utils.IpUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.dromara.soul.client.core.disruptor.SoulClientRegisterEventPublisher;
+import org.dromara.soul.common.enums.RpcTypeEnum;
+import org.dromara.soul.common.utils.IpUtils;
+import org.dromara.soul.register.client.api.SoulClientRegisterRepository;
+import org.dromara.soul.register.common.config.SoulRegisterCenterConfig;
+import org.dromara.soul.register.common.dto.MetaDataRegisterDTO;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.lang.NonNull;
+
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The type Context register listener.
@@ -34,70 +38,75 @@ import org.springframework.context.event.ContextRefreshedEvent;
 @Slf4j
 public class ContextRegisterListener implements ApplicationListener<ContextRefreshedEvent> {
     
-    private volatile AtomicBoolean registered = new AtomicBoolean(false);
+    private SoulClientRegisterEventPublisher publisher = SoulClientRegisterEventPublisher.getInstance();
+
+    private final AtomicBoolean registered = new AtomicBoolean(false);
     
-    private final String url;
+    private String contextPath;
     
-    private final SoulSpringMvcConfig soulSpringMvcConfig;
+    private String appName;
     
+    private String host;
+    
+    private Integer port;
+    
+    private final Boolean isFull;
+
     /**
      * Instantiates a new Context register listener.
      *
-     * @param soulSpringMvcConfig the soul spring mvc config
+     * @param config the config
+     * @param soulClientRegisterRepository the soulClientRegisterRepository
      */
-    public ContextRegisterListener(final SoulSpringMvcConfig soulSpringMvcConfig) {
-        String contextPath = soulSpringMvcConfig.getContextPath();
-        String adminUrl = soulSpringMvcConfig.getAdminUrl();
-        Integer port = soulSpringMvcConfig.getPort();
-        if (contextPath == null || "".equals(contextPath)
-                || adminUrl == null || "".equals(adminUrl)
-                || port == null) {
-            log.error("spring mvc param must config  contextPath ,adminUrl and port ");
-            throw new RuntimeException("spring mvc param must config  contextPath ,adminUrl and port");
+    public ContextRegisterListener(final SoulRegisterCenterConfig config, final SoulClientRegisterRepository soulClientRegisterRepository) {
+        Properties props = config.getProps();
+        this.isFull = Boolean.parseBoolean(props.getProperty("isFull", "false"));
+        if (isFull) {
+            String registerType = config.getRegisterType();
+            String serverLists = config.getServerLists();
+            String contextPath = props.getProperty("contextPath");
+            int port = Integer.parseInt(props.getProperty("port"));
+            if (StringUtils.isBlank(contextPath) || StringUtils.isBlank(registerType)
+                    || StringUtils.isBlank(serverLists) || port <= 0) {
+                String errorMsg = "http register param must config the contextPath, registerType , serverLists and port must > 0";
+                log.error(errorMsg);
+                throw new RuntimeException(errorMsg);
+            }
+            this.appName = props.getProperty("appName");
+            this.host = props.getProperty("host");
+            this.port = port;
+            this.contextPath = contextPath;
+            publisher.start(soulClientRegisterRepository);
         }
-        this.soulSpringMvcConfig = soulSpringMvcConfig;
-        url = adminUrl + "/soul-client/springmvc-register";
+       
     }
-    
+
     @Override
-    public void onApplicationEvent(final ContextRefreshedEvent contextRefreshedEvent) {
+    public void onApplicationEvent(@NonNull final ContextRefreshedEvent contextRefreshedEvent) {
         if (!registered.compareAndSet(false, true)) {
             return;
         }
-        if (soulSpringMvcConfig.isFull()) {
-            post(buildJsonParams(soulSpringMvcConfig.getContextPath()));
+        if (isFull) {
+            publisher.publishEvent(buildMetaDataDTO());
         }
     }
-    
-    private void post(final String json) {
-        try {
-            String result = OkHttpTools.getInstance().post(url, json);
-            if (Objects.equals(result, "success")) {
-                log.info("http context register success :{} " + json);
-            } else {
-                log.error("http context register error :{} " + json);
-            }
-        } catch (IOException e) {
-            log.error("cannot register soul admin param :{}", url + ":" + json);
-        }
-    }
-    
-    private String buildJsonParams(final String contextPath) {
-        String appName = soulSpringMvcConfig.getAppName();
-        Integer port = soulSpringMvcConfig.getPort();
+
+    private MetaDataRegisterDTO buildMetaDataDTO() {
+        String contextPath = this.contextPath;
+        String appName = this.appName;
+        Integer port = this.port;
         String path = contextPath + "/**";
-        String configHost = soulSpringMvcConfig.getHost();
-        String host = ("".equals(configHost) || null == configHost) ? IpUtils.getHost() : configHost;
-        SpringMvcRegisterDTO registerDTO = SpringMvcRegisterDTO.builder()
-                .context(contextPath)
+        String configHost = this.host;
+        String host = StringUtils.isBlank(configHost) ? IpUtils.getHost() : configHost;
+        return MetaDataRegisterDTO.builder()
+                .contextPath(contextPath)
                 .host(host)
                 .port(port)
                 .appName(appName)
                 .path(path)
-                .rpcType("http")
+                .rpcType(RpcTypeEnum.HTTP.getName())
                 .enabled(true)
                 .ruleName(path)
                 .build();
-        return OkHttpTools.getInstance().getGosn().toJson(registerDTO);
     }
 }

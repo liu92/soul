@@ -22,7 +22,7 @@
     <parent>
         <artifactId>soul-metrics</artifactId>
         <groupId>org.dromara</groupId>
-        <version>2.2.1</version>
+        <version>2.3.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -31,18 +31,23 @@
     <dependencies>
         <dependency>
             <groupId>org.dromara</groupId>
-            <artifactId>soul-metrics-spi</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.dromara</groupId>
             <artifactId>soul-common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.dromara</groupId>
-            <artifactId>soul-spi</artifactId>
+            <artifactId>soul-metrics-spi</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>soul-metrics-prometheus</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

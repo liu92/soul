@@ -41,7 +41,7 @@ public class SoulContext implements Serializable {
     private String method;
 
     /**
-     * is rpcType data. now we only support "http","dubbo" "springCloud".
+     * is rpcType data. now we only support "http","dubbo","springCloud","sofa".
      */
     private String rpcType;
 
@@ -89,6 +89,4 @@ public class SoulContext implements Serializable {
      * startDateTime.
      */
     private LocalDateTime startDateTime;
-    
-
 }

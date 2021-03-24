@@ -1,25 +1,26 @@
 /*
- *   Licensed to the Apache Software Foundation (ASF) under one or more
- *   contributor license agreements.  See the NOTICE file distributed with
- *   this work for additional information regarding copyright ownership.
- *   The ASF licenses this file to You under the Apache License, Version 2.0
- *   (the "License"); you may not use this file except in compliance with
- *   the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.dromara.soul.springboot.starter.plugin.springcloud;
 
 import org.dromara.soul.plugin.api.SoulPlugin;
+import org.dromara.soul.plugin.api.context.SoulContextDecorator;
 import org.dromara.soul.plugin.springcloud.SpringCloudPlugin;
+import org.dromara.soul.plugin.springcloud.context.SpringCloudSoulContextDecorator;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -50,5 +51,15 @@ public class SpringCloudPluginConfiguration {
     @Bean
     public SoulPlugin springCloudPlugin(final ObjectProvider<LoadBalancerClient> loadBalancerClient) {
         return new SpringCloudPlugin(loadBalancerClient.getIfAvailable());
+    }
+    
+    /**
+     * Spring cloud dubbo soul context decorator soul context decorator.
+     *
+     * @return the soul context decorator
+     */
+    @Bean
+    public SoulContextDecorator springCloudDubboSoulContextDecorator() {
+        return new SpringCloudSoulContextDecorator();
     }
 }

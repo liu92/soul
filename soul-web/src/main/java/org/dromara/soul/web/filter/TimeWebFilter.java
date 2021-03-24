@@ -1,26 +1,25 @@
 /*
- *   Licensed to the Apache Software Foundation (ASF) under one or more
- *   contributor license agreements.  See the NOTICE file distributed with
- *   this work for additional information regarding copyright ownership.
- *   The ASF licenses this file to You under the Apache License, Version 2.0
- *   (the "License"); you may not use this file except in compliance with
- *   the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.dromara.soul.web.filter;
 
 import org.dromara.soul.plugin.api.result.SoulResultEnum;
-import org.dromara.soul.plugin.base.utils.SoulResultWarp;
-import org.dromara.soul.plugin.base.utils.WebFluxResultUtils;
+import org.dromara.soul.plugin.api.result.SoulResultWrap;
+import org.dromara.soul.plugin.api.utils.WebFluxResultUtils;
 import org.dromara.soul.web.config.SoulConfig;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
@@ -32,9 +31,7 @@ import reactor.core.publisher.Mono;
  * this is visit time verify filter.
  *
  * @author xiaoyu(Myth)
- * @deprecated do not use
  */
-@Deprecated
 public class TimeWebFilter extends AbstractWebFilter {
 
     private SoulConfig soulConfig;
@@ -58,7 +55,7 @@ public class TimeWebFilter extends AbstractWebFilter {
     protected Mono<Void> doDenyResponse(final ServerWebExchange exchange) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.REQUEST_TIMEOUT);
-        Object error = SoulResultWarp.error(SoulResultEnum.TIME_ERROR.getCode(), SoulResultEnum.TIME_ERROR.getMsg(), null);
+        Object error = SoulResultWrap.error(SoulResultEnum.TIME_ERROR.getCode(), SoulResultEnum.TIME_ERROR.getMsg(), null);
         return WebFluxResultUtils.result(exchange, error);
     }
 }

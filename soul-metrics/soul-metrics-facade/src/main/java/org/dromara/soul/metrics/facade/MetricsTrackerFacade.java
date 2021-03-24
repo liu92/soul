@@ -18,14 +18,10 @@
 package org.dromara.soul.metrics.facade;
 
 import com.google.common.base.Preconditions;
-import java.util.Optional;
-import lombok.Getter;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.soul.metrics.api.HistogramMetricsTrackerDelegate;
-import org.dromara.soul.metrics.api.SummaryMetricsTrackerDelegate;
 import org.dromara.soul.metrics.config.MetricsConfig;
-import org.dromara.soul.metrics.facade.handler.MetricsTrackerHandler;
-import org.dromara.soul.metrics.spi.MetricsTrackerManager;
+import org.dromara.soul.metrics.spi.MetricsBootService;
 import org.dromara.soul.spi.ExtensionLoader;
 
 /**
@@ -34,14 +30,11 @@ import org.dromara.soul.spi.ExtensionLoader;
 @Slf4j
 public final class MetricsTrackerFacade {
     
-    @Getter
-    private MetricsTrackerManager metricsTrackerManager;
+    private MetricsBootService metricsBootService;
     
-    @Getter
-    private volatile boolean enabled;
+    private final AtomicBoolean isStarted = new AtomicBoolean(false);
     
     private MetricsTrackerFacade() {
-        loadMetricsManager();
     }
     
     /**
@@ -59,97 +52,13 @@ public final class MetricsTrackerFacade {
      * @param metricsConfig metrics config
      */
     public void start(final MetricsConfig metricsConfig) {
-        metricsTrackerManager = ExtensionLoader.getExtensionLoader(MetricsTrackerManager.class).getJoin(metricsConfig.getMetricsName());
-        Preconditions.checkNotNull(metricsTrackerManager, "Can not find metrics tracker manager with metrics name in metrics configuration.");
-        metricsTrackerManager.start(metricsConfig);
-        Integer threadCount = Optional.ofNullable(metricsConfig.getThreadCount()).orElse(Runtime.getRuntime().availableProcessors());
-        MetricsTrackerHandler.getInstance().init(metricsConfig.getAsync(), threadCount, metricsTrackerManager);
-        enabled = true;
-    }
-    
-    /**
-     * Increment of counter metrics tracker.
-     *
-     * @param metricsLabel metrics label
-     * @param labelValues  label values
-     */
-    public void counterInc(final String metricsLabel, final String... labelValues) {
-        if (enabled) {
-            MetricsTrackerHandler.getInstance().counterInc(metricsLabel, labelValues);
-        }
-    }
-    
-    /**
-     * Increment of gauge metrics tracker.
-     *
-     * @param metricsLabel metrics label
-     * @param labelValues  label values
-     */
-    public void gaugeInc(final String metricsLabel, final String... labelValues) {
-        if (enabled) {
-            MetricsTrackerHandler.getInstance().gaugeInc(metricsLabel, labelValues);
-        }
-    }
-    
-    /**
-     * Decrement of gauge metrics tracker.
-     *
-     * @param metricsLabel metrics label
-     * @param labelValues  label values
-     */
-    public void gaugeDec(final String metricsLabel, final String... labelValues) {
-        if (enabled) {
-            MetricsTrackerHandler.getInstance().gaugeDec(metricsLabel, labelValues);
-        }
-    }
-    
-    /**
-     * Start timer of histogram metrics tracker.
-     *
-     * @param metricsLabel metrics label
-     * @param labelValues  label values
-     * @return histogram metrics tracker delegate
-     */
-    public Optional<HistogramMetricsTrackerDelegate> histogramStartTimer(final String metricsLabel, final String... labelValues) {
-        if (!enabled) {
-            return Optional.empty();
-        }
-        return MetricsTrackerHandler.getInstance().histogramStartTimer(metricsLabel, labelValues);
-    }
-    
-    /**
-     * Observe amount of time since start time with histogram metrics tracker.
-     *
-     * @param delegate histogram metrics tracker delegate
-     */
-    public void histogramObserveDuration(final HistogramMetricsTrackerDelegate delegate) {
-        if (enabled) {
-            MetricsTrackerHandler.getInstance().histogramObserveDuration(delegate);
-        }
-    }
-    
-    /**
-     * Start timer of summary metrics tracker.
-     *
-     * @param metricsLabel metrics label
-     * @param labelValues  label values
-     * @return summary metrics tracker delegate
-     */
-    public Optional<SummaryMetricsTrackerDelegate> summaryStartTimer(final String metricsLabel, final String... labelValues) {
-        if (!enabled) {
-            return Optional.empty();
-        }
-        return MetricsTrackerHandler.getInstance().summaryStartTimer(metricsLabel, labelValues);
-    }
-    
-    /**
-     * Observe amount of time since start time with summary metrics tracker.
-     *
-     * @param delegate summary metrics tracker delegate
-     */
-    public void summaryObserveDuration(final SummaryMetricsTrackerDelegate delegate) {
-        if (enabled) {
-            MetricsTrackerHandler.getInstance().summaryObserveDuration(delegate);
+        if (this.isStarted.compareAndSet(false, true)) {
+            metricsBootService = ExtensionLoader.getExtensionLoader(MetricsBootService.class).getJoin(metricsConfig.getMetricsName());
+            Preconditions.checkNotNull(metricsBootService,
+                    "Can not find metrics tracker manager with metrics name : %s in metrics configuration.", metricsConfig.getMetricsName());
+            metricsBootService.start(metricsConfig);
+        } else {
+            log.info("metrics tracker has started !");
         }
     }
     
@@ -157,21 +66,25 @@ public final class MetricsTrackerFacade {
      * Stop.
      */
     public void stop() {
-        enabled = false;
-        if (null != metricsTrackerManager) {
-            metricsTrackerManager.stop();
+        this.isStarted.compareAndSet(true, false);
+        if (null != metricsBootService) {
+            metricsBootService.stop();
         }
-        MetricsTrackerHandler.getInstance().close();
     }
     
-    private void loadMetricsManager() {
+    /**
+     * Check if start or not.
+     *
+     * @return true is stared, otherwise not.
+     */
+    public boolean isStarted() {
+        return isStarted.get();
     }
     
     /**
      * Metrics tracker facade holder.
      */
     private static class MetricsTrackerFacadeHolder {
-        
         private static final MetricsTrackerFacade INSTANCE = new MetricsTrackerFacade();
     }
 }

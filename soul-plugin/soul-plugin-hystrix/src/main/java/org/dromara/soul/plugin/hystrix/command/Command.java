@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.dromara.soul.plugin.hystrix.command;
 
 import com.netflix.hystrix.exception.HystrixRuntimeException;
@@ -6,9 +23,9 @@ import com.netflix.hystrix.exception.HystrixTimeoutException;
 import java.net.URI;
 import java.util.Objects;
 import org.dromara.soul.plugin.api.result.SoulResultEnum;
-import org.dromara.soul.plugin.base.utils.SoulResultWarp;
-import org.dromara.soul.plugin.base.utils.SpringBeanUtils;
-import org.dromara.soul.plugin.base.utils.WebFluxResultUtils;
+import org.dromara.soul.plugin.api.result.SoulResultWrap;
+import org.dromara.soul.plugin.api.utils.SpringBeanUtils;
+import org.dromara.soul.plugin.api.utils.WebFluxResultUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.reactive.DispatcherHandler;
@@ -42,7 +59,7 @@ public interface Command {
      *
      * @param exchange  the exchange
      * @param exception exception instance
-     * @return error which be wrapped by {@link SoulResultWarp}
+     * @return error which be wrapped by {@link SoulResultWrap}
      */
     default Object generateError(ServerWebExchange exchange, Throwable exception) {
         Object error;
@@ -50,17 +67,17 @@ public interface Command {
             HystrixRuntimeException e = (HystrixRuntimeException) exception;
             if (e.getFailureType() == HystrixRuntimeException.FailureType.TIMEOUT) {
                 exchange.getResponse().setStatusCode(HttpStatus.GATEWAY_TIMEOUT);
-                error = SoulResultWarp.error(SoulResultEnum.SERVICE_TIMEOUT.getCode(), SoulResultEnum.SERVICE_TIMEOUT.getMsg(), null);
+                error = SoulResultWrap.error(SoulResultEnum.SERVICE_TIMEOUT.getCode(), SoulResultEnum.SERVICE_TIMEOUT.getMsg(), null);
             } else {
                 exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
-                error = SoulResultWarp.error(SoulResultEnum.SERVICE_RESULT_ERROR.getCode(), SoulResultEnum.SERVICE_RESULT_ERROR.getMsg(), null);
+                error = SoulResultWrap.error(SoulResultEnum.SERVICE_RESULT_ERROR.getCode(), SoulResultEnum.SERVICE_RESULT_ERROR.getMsg(), null);
             }
         } else if (exception instanceof HystrixTimeoutException) {
             exchange.getResponse().setStatusCode(HttpStatus.GATEWAY_TIMEOUT);
-            error = SoulResultWarp.error(SoulResultEnum.SERVICE_TIMEOUT.getCode(), SoulResultEnum.SERVICE_TIMEOUT.getMsg(), null);
+            error = SoulResultWrap.error(SoulResultEnum.SERVICE_TIMEOUT.getCode(), SoulResultEnum.SERVICE_TIMEOUT.getMsg(), null);
         } else {
             exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
-            error = SoulResultWarp.error(SoulResultEnum.SERVICE_RESULT_ERROR.getCode(), SoulResultEnum.SERVICE_RESULT_ERROR.getMsg(), null);
+            error = SoulResultWrap.error(SoulResultEnum.SERVICE_RESULT_ERROR.getCode(), SoulResultEnum.SERVICE_RESULT_ERROR.getMsg(), null);
         }
         return error;
     }

@@ -1,27 +1,22 @@
 /*
- *   Licensed to the Apache Software Foundation (ASF) under one or more
- *   contributor license agreements.  See the NOTICE file distributed with
- *   this work for additional information regarding copyright ownership.
- *   The ASF licenses this file to You under the Apache License, Version 2.0
- *   (the "License"); you may not use this file except in compliance with
- *   the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.dromara.soul.admin.service.impl;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.dromara.soul.admin.dto.RuleConditionDTO;
 import org.dromara.soul.admin.dto.RuleDTO;
@@ -35,7 +30,6 @@ import org.dromara.soul.admin.mapper.RuleConditionMapper;
 import org.dromara.soul.admin.mapper.RuleMapper;
 import org.dromara.soul.admin.mapper.SelectorMapper;
 import org.dromara.soul.admin.page.CommonPager;
-import org.dromara.soul.admin.page.PageParameter;
 import org.dromara.soul.admin.page.PageResultUtils;
 import org.dromara.soul.admin.query.RuleConditionQuery;
 import org.dromara.soul.admin.query.RuleQuery;
@@ -51,6 +45,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * RuleServiceImpl.
@@ -147,7 +146,7 @@ public class RuleServiceImpl implements RuleService {
             ruleMapper.delete(id);
             ruleConditionMapper.deleteByQuery(new RuleConditionQuery(id));
 
-            //发送删规则事件
+            // send deleted rule event
             eventPublisher.publishEvent(new DataChangedEvent(ConfigGroupEnum.RULE, DataEventTypeEnum.DELETE,
                     Collections.singletonList(RuleDO.transFrom(ruleDO, pluginDO.getName(), null))));
         }
@@ -177,9 +176,9 @@ public class RuleServiceImpl implements RuleService {
      */
     @Override
     public CommonPager<RuleVO> listByPage(final RuleQuery ruleQuery) {
-        PageParameter pageParameter = ruleQuery.getPageParameter();
-        Integer count = ruleMapper.countByQuery(ruleQuery);
-        return PageResultUtils.result(pageParameter, count, () -> ruleMapper.selectByQuery(ruleQuery).stream().map(RuleVO::buildRuleVO).collect(Collectors.toList()));
+        return PageResultUtils.result(ruleQuery.getPageParameter(),
+            () -> ruleMapper.countByQuery(ruleQuery),
+            () -> ruleMapper.selectByQuery(ruleQuery).stream().map(RuleVO::buildRuleVO).collect(Collectors.toList()));
     }
 
     @Override
@@ -229,5 +228,4 @@ public class RuleServiceImpl implements RuleService {
         }
         return RuleDO.transFrom(ruleDO, pluginDO.getName(), conditions);
     }
-
 }

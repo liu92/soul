@@ -17,17 +17,18 @@
 
 package org.dromara.soul.plugin.global;
 
-import org.apache.commons.lang3.StringUtils;
 import org.dromara.soul.common.constant.Constants;
 import org.dromara.soul.common.dto.MetaData;
 import org.dromara.soul.common.enums.RpcTypeEnum;
 import org.dromara.soul.plugin.api.context.SoulContext;
 import org.dromara.soul.plugin.api.context.SoulContextBuilder;
+import org.dromara.soul.plugin.api.context.SoulContextDecorator;
 import org.dromara.soul.plugin.global.cache.MetaDataCache;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.server.ServerWebExchange;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -38,66 +39,42 @@ import java.util.Optional;
  */
 public class DefaultSoulContextBuilder implements SoulContextBuilder {
     
+    private final Map<String, SoulContextDecorator> decoratorMap;
+    
+    /**
+     * Instantiates a new Default soul context builder.
+     *
+     * @param decoratorMap the decorator map
+     */
+    public DefaultSoulContextBuilder(final Map<String, SoulContextDecorator> decoratorMap) {
+        this.decoratorMap = decoratorMap;
+    }
+
     @Override
     public SoulContext build(final ServerWebExchange exchange) {
-        final ServerHttpRequest request = exchange.getRequest();
+        ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
         MetaData metaData = MetaDataCache.getInstance().obtain(path);
         if (Objects.nonNull(metaData) && metaData.getEnabled()) {
             exchange.getAttributes().put(Constants.META_DATA, metaData);
         }
-        return transform(request, metaData);
+        return Optional.ofNullable(metaData).map(e -> decoratorMap.get(e.getRpcType()))
+                .orElse(decoratorMap.get(RpcTypeEnum.HTTP.getName()))
+                .decorator(buildDefault(request), metaData);
     }
     
-    /**
-     * ServerHttpRequest transform RequestDTO .
-     *
-     * @param request {@linkplain ServerHttpRequest}
-     * @return RequestDTO request dto
-     */
-    private SoulContext transform(final ServerHttpRequest request, final MetaData metaData) {
-        final String appKey = request.getHeaders().getFirst(Constants.APP_KEY);
-        final String sign = request.getHeaders().getFirst(Constants.SIGN);
-        final String timestamp = request.getHeaders().getFirst(Constants.TIMESTAMP);
+    private SoulContext buildDefault(final ServerHttpRequest request) {
+        String appKey = request.getHeaders().getFirst(Constants.APP_KEY);
+        String sign = request.getHeaders().getFirst(Constants.SIGN);
+        String timestamp = request.getHeaders().getFirst(Constants.TIMESTAMP);
         SoulContext soulContext = new SoulContext();
         String path = request.getURI().getPath();
         soulContext.setPath(path);
-        if (Objects.nonNull(metaData) && metaData.getEnabled()) {
-            if (RpcTypeEnum.SPRING_CLOUD.getName().equals(metaData.getRpcType())) {
-                setSoulContextByHttp(soulContext, path);
-                soulContext.setRpcType(metaData.getRpcType());
-            } else {
-                setSoulContextByDubbo(soulContext, metaData);
-            }
-        } else {
-            setSoulContextByHttp(soulContext, path);
-            soulContext.setRpcType(RpcTypeEnum.HTTP.getName());
-        }
         soulContext.setAppKey(appKey);
         soulContext.setSign(sign);
         soulContext.setTimestamp(timestamp);
         soulContext.setStartDateTime(LocalDateTime.now());
         Optional.ofNullable(request.getMethod()).ifPresent(httpMethod -> soulContext.setHttpMethod(httpMethod.name()));
         return soulContext;
-    }
-    
-    private void setSoulContextByDubbo(final SoulContext soulContext, final MetaData metaData) {
-        soulContext.setModule(metaData.getAppName());
-        soulContext.setMethod(metaData.getServiceName());
-        soulContext.setRpcType(metaData.getRpcType());
-        soulContext.setContextPath(metaData.getContextPath());
-    }
-    
-    private void setSoulContextByHttp(final SoulContext soulContext, final String path) {
-        String contextPath = "/";
-        String[] splitList = StringUtils.split(path, "/");
-        if (splitList.length != 0) {
-            contextPath = contextPath.concat(splitList[0]);
-        }
-        String realUrl = path.substring(contextPath.length());
-        soulContext.setContextPath(contextPath);
-        soulContext.setModule(contextPath);
-        soulContext.setMethod(realUrl);
-        soulContext.setRealUrl(realUrl);
     }
 }

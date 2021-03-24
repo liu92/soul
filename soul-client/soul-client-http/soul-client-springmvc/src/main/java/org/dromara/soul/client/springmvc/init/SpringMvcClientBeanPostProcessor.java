@@ -17,18 +17,14 @@
 
 package org.dromara.soul.client.springmvc.init;
 
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.util.Objects;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.soul.client.common.utils.OkHttpTools;
+import org.apache.commons.lang3.StringUtils;
+import org.dromara.soul.client.core.disruptor.SoulClientRegisterEventPublisher;
 import org.dromara.soul.client.springmvc.annotation.SoulSpringMvcClient;
-import org.dromara.soul.client.springmvc.config.SoulSpringMvcConfig;
-import org.dromara.soul.client.springmvc.dto.SpringMvcRegisterDTO;
-import org.dromara.soul.client.springmvc.utils.IpUtils;
+import org.dromara.soul.common.utils.IpUtils;
+import org.dromara.soul.register.client.api.SoulClientRegisterRepository;
+import org.dromara.soul.register.common.config.SoulRegisterCenterConfig;
+import org.dromara.soul.register.common.dto.MetaDataRegisterDTO;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.core.annotation.AnnotationUtils;
@@ -36,7 +32,13 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+
+import java.lang.reflect.Method;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The type Soul spring mvc client bean post processor.
@@ -46,88 +48,90 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class SpringMvcClientBeanPostProcessor implements BeanPostProcessor {
     
+    private SoulClientRegisterEventPublisher publisher = SoulClientRegisterEventPublisher.getInstance();
+    
     private final ThreadPoolExecutor executorService;
     
-    private final String url;
+    private final String contextPath;
     
-    private final SoulSpringMvcConfig soulSpringMvcConfig;
+    private final String appName;
+    
+    private final String host;
+    
+    private final Integer port;
+    
+    private final Boolean isFull;
     
     /**
      * Instantiates a new Soul client bean post processor.
-     *
-     * @param soulSpringMvcConfig the soul spring mvc config
      */
-    public SpringMvcClientBeanPostProcessor(final SoulSpringMvcConfig soulSpringMvcConfig) {
-        String contextPath = soulSpringMvcConfig.getContextPath();
-        String adminUrl = soulSpringMvcConfig.getAdminUrl();
-        Integer port = soulSpringMvcConfig.getPort();
-        if (contextPath == null || "".equals(contextPath)
-                || adminUrl == null || "".equals(adminUrl)
-                || port == null) {
-            log.error("spring mvc param must config  contextPath ,adminUrl and port ");
-            throw new RuntimeException("spring mvc param must config  contextPath ,adminUrl and port");
+    public SpringMvcClientBeanPostProcessor(final SoulRegisterCenterConfig config, final SoulClientRegisterRepository soulClientRegisterRepository) {
+        String registerType = config.getRegisterType();
+        String serverLists = config.getServerLists();
+        Properties props = config.getProps();
+        int port = Integer.parseInt(props.getProperty("port"));
+        if (StringUtils.isBlank(registerType) || StringUtils.isBlank(serverLists) || port <= 0) {
+            String errorMsg = "http register param must config the registerType , serverLists and port must > 0";
+            log.error(errorMsg);
+            throw new RuntimeException(errorMsg);
         }
-        this.soulSpringMvcConfig = soulSpringMvcConfig;
-        url = adminUrl + "/soul-client/springmvc-register";
+        this.appName = props.getProperty("appName");
+        this.host = props.getProperty("host");
+        this.port = port;
+        this.contextPath = props.getProperty("contextPath");
+        this.isFull = Boolean.parseBoolean(props.getProperty("isFull", "false"));
         executorService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        publisher.start(soulClientRegisterRepository);
     }
-    
+
     @Override
-    public Object postProcessBeforeInitialization(@NonNull final Object bean, @NonNull final String beanName) throws BeansException {
-        if (soulSpringMvcConfig.isFull()) {
+    public Object postProcessAfterInitialization(@NonNull final Object bean, @NonNull final String beanName) throws BeansException {
+        if (isFull) {
             return bean;
         }
         Controller controller = AnnotationUtils.findAnnotation(bean.getClass(), Controller.class);
-        RestController restController = AnnotationUtils.findAnnotation(bean.getClass(), RestController.class);
         RequestMapping requestMapping = AnnotationUtils.findAnnotation(bean.getClass(), RequestMapping.class);
-        if (controller != null || restController != null || requestMapping != null) {
-            String contextPath = soulSpringMvcConfig.getContextPath();
+        if (controller != null || requestMapping != null) {
             SoulSpringMvcClient clazzAnnotation = AnnotationUtils.findAnnotation(bean.getClass(), SoulSpringMvcClient.class);
             String prePath = "";
-            if (Objects.nonNull(clazzAnnotation)) {
-                if (clazzAnnotation.path().indexOf("*") > 1) {
-                    String finalPrePath = prePath;
-                    executorService.execute(() -> post(buildJsonParams(clazzAnnotation, contextPath, finalPrePath)));
-                    return bean;
-                }
-                prePath = clazzAnnotation.path();
+            if (Objects.isNull(clazzAnnotation)) {
+                return bean;
             }
+            if (clazzAnnotation.path().indexOf("*") > 1) {
+                String finalPrePath = prePath;
+                executorService.execute(() -> publisher.publishEvent(buildMetaDataDTO(clazzAnnotation, finalPrePath)));
+                return bean;
+            }
+            prePath = clazzAnnotation.path();
             final Method[] methods = ReflectionUtils.getUniqueDeclaredMethods(bean.getClass());
             for (Method method : methods) {
                 SoulSpringMvcClient soulSpringMvcClient = AnnotationUtils.findAnnotation(method, SoulSpringMvcClient.class);
                 if (Objects.nonNull(soulSpringMvcClient)) {
                     String finalPrePath = prePath;
-                    executorService.execute(() -> post(buildJsonParams(soulSpringMvcClient, contextPath, finalPrePath)));
+                    executorService.execute(() -> publisher.publishEvent(buildMetaDataDTO(soulSpringMvcClient, finalPrePath)));
                 }
             }
         }
         return bean;
     }
     
-    private void post(final String json) {
-        try {
-            String result = OkHttpTools.getInstance().post(url, json);
-            if (Objects.equals(result, "success")) {
-                log.info("http client register success :{} " + json);
-            } else {
-                log.error("http client register error :{} " + json);
-            }
-        } catch (IOException e) {
-            log.error("cannot register soul admin param :{}", url + ":" + json);
+    private MetaDataRegisterDTO buildMetaDataDTO(final SoulSpringMvcClient soulSpringMvcClient, final String prePath) {
+        String contextPath = this.contextPath;
+        String appName = this.appName;
+        Integer port = this.port;
+        String path;
+        if (StringUtils.isEmpty(contextPath)) {
+            path = prePath + soulSpringMvcClient.path();
+        } else {
+            path = contextPath + prePath + soulSpringMvcClient.path();
         }
-    }
-    
-    private String buildJsonParams(final SoulSpringMvcClient soulSpringMvcClient, final String contextPath, final String prePath) {
-        String appName = soulSpringMvcConfig.getAppName();
-        Integer port = soulSpringMvcConfig.getPort();
-        String path = contextPath + prePath + soulSpringMvcClient.path();
         String desc = soulSpringMvcClient.desc();
-        String configHost = soulSpringMvcConfig.getHost();
-        String host = ("".equals(configHost) || null == configHost) ? IpUtils.getHost() : configHost;
+        String configHost = this.host;
+        String host = StringUtils.isBlank(configHost) ? IpUtils.getHost() : configHost;
         String configRuleName = soulSpringMvcClient.ruleName();
-        String ruleName = ("".equals(configRuleName)) ? path : configRuleName;
-        SpringMvcRegisterDTO registerDTO = SpringMvcRegisterDTO.builder()
-                .context(contextPath)
+        String ruleName = StringUtils.isBlank(configRuleName) ? path : configRuleName;
+        return MetaDataRegisterDTO.builder()
+                .contextPath(contextPath)
                 .host(host)
                 .port(port)
                 .appName(appName)
@@ -138,7 +142,6 @@ public class SpringMvcClientBeanPostProcessor implements BeanPostProcessor {
                 .ruleName(ruleName)
                 .registerMetaData(soulSpringMvcClient.registerMetaData())
                 .build();
-        return OkHttpTools.getInstance().getGosn().toJson(registerDTO);
     }
 }
 
